@@ -1,4 +1,4 @@
-# rule-forge
+# merge-rules
 
 一个 Claude Code skill，用于发现、合并和管理你所有项目中的 AI 编码代理规则。
 
