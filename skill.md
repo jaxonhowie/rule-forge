@@ -67,7 +67,9 @@ uname -s 2>/dev/null || echo "Windows"
 
 ## 阶段 1 — 发现
 
-默认排除以下测试相关目录（`--test` / `-t` 未指定时）：
+**始终排除当前工作目录**（`$PWD`），防止正在开发的项目规则文件污染全局合并结果。
+
+默认还排除以下测试相关目录（`--test` / `-t` 未指定时）：
 
 ```
 tests/  test/  __tests__/  fixtures/  spec/  specs/
@@ -75,9 +77,11 @@ tests/  test/  __tests__/  fixtures/  spec/  specs/
 
 ### Unix / macOS（bash / zsh）
 
-**默认（排除测试目录）：**
+**默认（排除当前目录 + 测试目录）：**
 
 ```bash
+CURRENT_DIR="$(pwd)"
+
 find ~ -maxdepth 10 \( \
   -name "CLAUDE.md"      -o \
   -name "AGENTS.md"      -o \
@@ -88,6 +92,7 @@ find ~ -maxdepth 10 \( \
   -name ".clinerules"    -o \
   -name "copilot-instructions.md" \
 \) \
+  ! -path "$CURRENT_DIR/*" \
   ! -path "*/node_modules/*" \
   ! -path "*/.git/*" \
   ! -path "*/vendor/*" \
@@ -104,38 +109,42 @@ find ~ -maxdepth 10 \( \
 
 # Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
+  ! -path "$CURRENT_DIR/*" \
   ! -path "*/node_modules/*" ! -path "*/.git/*" \
   ! -path "*/tests/*" ! -path "*/test/*" ! -path "*/fixtures/*" \
   2>/dev/null
 ```
 
-**指定 `--test` / `-t` 时，去掉所有 `! -path "*/test*/*"` 和 `! -path "*/fixtures/*"` 排除项，其余不变。**
+**指定 `--test` / `-t` 时，去掉所有 `! -path "*/test*/*"` 和 `! -path "*/fixtures/*"` 排除项，其余（含 `$CURRENT_DIR`）不变。**
 
 ### Windows（PowerShell 5.1+）
 
-**默认（排除测试目录）：**
+**默认（排除当前目录 + 测试目录）：**
 
 ```powershell
 $names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
            ".cursorrules",".windsurfrules",".clinerules",
            "copilot-instructions.md")
-$exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+$currentDir  = (Get-Location).Path
+$exclude     = 'node_modules|\.git|vendor|dist|build|__pycache__'
 $excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -notmatch $exclude -and
+  Where-Object { $_.FullName -notlike "$currentDir*" -and
+                 $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
 
 # Cursor MDC
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
+                 $_.FullName -notlike "$currentDir*" -and
                  $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
 ```
 
-**指定 `--test` / `-t` 时，移除 `-and $_.FullName -notmatch $excludeTest` 条件，其余不变。**
+**指定 `--test` / `-t` 时，移除 `-and $_.FullName -notmatch $excludeTest` 条件；`-notlike "$currentDir*"` 始终保留。**
 
 读取每个发现的文件，记录其路径、来源代理和完整内容。
 

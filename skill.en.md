@@ -65,7 +65,9 @@ uname -s 2>/dev/null || echo "Windows"
 
 ## Phase 1 — Discovery
 
-The following test-related directories are excluded by default (omit exclusions when `--test` / `-t` is set):
+**The current working directory (`$PWD`) is always excluded** to prevent the project you're currently in from polluting the global merge.
+
+The following test-related directories are also excluded by default (omit when `--test` / `-t` is set):
 
 ```
 tests/  test/  __tests__/  fixtures/  spec/  specs/
@@ -73,9 +75,11 @@ tests/  test/  __tests__/  fixtures/  spec/  specs/
 
 ### Unix / macOS (bash / zsh)
 
-**Default (test dirs excluded):**
+**Default (current dir + test dirs excluded):**
 
 ```bash
+CURRENT_DIR="$(pwd)"
+
 find ~ -maxdepth 10 \( \
   -name "CLAUDE.md"      -o \
   -name "AGENTS.md"      -o \
@@ -86,6 +90,7 @@ find ~ -maxdepth 10 \( \
   -name ".clinerules"    -o \
   -name "copilot-instructions.md" \
 \) \
+  ! -path "$CURRENT_DIR/*" \
   ! -path "*/node_modules/*" \
   ! -path "*/.git/*" \
   ! -path "*/vendor/*" \
@@ -102,38 +107,42 @@ find ~ -maxdepth 10 \( \
 
 # Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
+  ! -path "$CURRENT_DIR/*" \
   ! -path "*/node_modules/*" ! -path "*/.git/*" \
   ! -path "*/tests/*" ! -path "*/test/*" ! -path "*/fixtures/*" \
   2>/dev/null
 ```
 
-**With `--test` / `-t`: remove all `! -path "*/test*/*"` and `! -path "*/fixtures/*"` exclusions. All other filters remain.**
+**With `--test` / `-t`: remove all `! -path "*/test*/*"` and `! -path "*/fixtures/*"` exclusions. `! -path "$CURRENT_DIR/*"` always stays.**
 
 ### Windows (PowerShell 5.1+)
 
-**Default (test dirs excluded):**
+**Default (current dir + test dirs excluded):**
 
 ```powershell
 $names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
            ".cursorrules",".windsurfrules",".clinerules",
            "copilot-instructions.md")
-$exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+$currentDir  = (Get-Location).Path
+$exclude     = 'node_modules|\.git|vendor|dist|build|__pycache__'
 $excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -notmatch $exclude -and
+  Where-Object { $_.FullName -notlike "$currentDir*" -and
+                 $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
 
 # Cursor MDC
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
+                 $_.FullName -notlike "$currentDir*" -and
                  $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
 ```
 
-**With `--test` / `-t`: remove `-and $_.FullName -notmatch $excludeTest`. All other filters remain.**
+**With `--test` / `-t`: remove `-and $_.FullName -notmatch $excludeTest`. `-notlike "$currentDir*"` always stays.**
 
 Read every discovered file. Record its path, source agent, and full content.
 
