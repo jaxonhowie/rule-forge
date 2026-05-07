@@ -12,7 +12,9 @@ description: Discover all agent rule files on this machine, merge and deduplicat
 
 | Command | Action |
 |---|---|
-| `/merge-rules` | Discover + merge + classify → write `~/.claude/merge-rules.md` (test dirs excluded) |
+| `/merge-rules` | Incremental check → merge if changed → write `~/.claude/merge-rules.md` |
+| `/merge-rules --refresh` | Force full re-scan (picks up newly added files) |
+| `/merge-rules -r` | Short alias for `--refresh` |
 | `/merge-rules --test` | Same, but **include** rule files inside test directories |
 | `/merge-rules -t` | Short alias for `--test` |
 | `/merge-rules init` | Apply to current project (default `--scope base`) |
@@ -48,6 +50,7 @@ Extract all flags before any operations:
 
 | Flag | Alias | Default | Used in |
 |---|---|---|---|
+| `--refresh` | `-r` | off | Phase 1: force full scan, ignore manifest |
 | `--test` | `-t` | off | Phase 1: include test directories in discovery |
 | `--scope base\|spec\|all` | `-s` | `base` | Phase 4: rule scope filter (`init` only) |
 | `--agent <name>` | — | auto-detect | Phase 4: target agent (`init` only) |
@@ -63,19 +66,54 @@ uname -s 2>/dev/null || echo "Windows"
 
 ---
 
-## Phase 1 — Discovery
+## Phase 1 — Discovery (incremental mode)
 
-**The current working directory (`$PWD`) is always excluded** to prevent the project you're currently in from polluting the global merge.
+**Always excluded (all modes):**
+- Current working directory `$PWD` (prevents circular pollution)
+- `node_modules/` · `.git/` · `vendor/` · `dist/` · `build/` · `__pycache__/`
+- Test dirs (default only): `tests/` · `test/` · `__tests__/` · `fixtures/` · `spec/` · `specs/`
 
-The following test-related directories are also excluded by default (omit when `--test` / `-t` is set):
+---
+
+### Manifest path
+
+| OS | Path |
+|---|---|
+| macOS / Linux | `~/.claude/merge-rules.manifest.json` |
+| Windows | `%APPDATA%\Claude\merge-rules.manifest.json` |
+
+Manifest format:
+
+```json
+{
+  "generated": "ISO-DATE",
+  "sources": {
+    "/absolute/path/to/CLAUDE.md": 1746600000,
+    "/absolute/path/to/.cursorrules": 1746500000
+  }
+}
+```
+
+Values in `sources` are **Unix mtime timestamps** (integer seconds).
+
+---
+
+### 1.1 Decision: cached mode vs full scan
 
 ```
-tests/  test/  __tests__/  fixtures/  spec/  specs/
+if manifest missing OR --refresh / -r set:
+    → full scan mode (1.2)
+else:
+    → cached check mode (1.3)
 ```
 
-### Unix / macOS (bash / zsh)
+---
 
-**Default (current dir + test dirs excluded):**
+### 1.2 Full scan mode
+
+Run `find ~` (on `--refresh` or first run):
+
+**Unix / macOS:**
 
 ```bash
 CURRENT_DIR="$(pwd)"
@@ -113,38 +151,80 @@ find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
   2>/dev/null
 ```
 
-**With `--test` / `-t`: remove all `! -path "*/test*/*"` and `! -path "*/fixtures/*"` exclusions. `! -path "$CURRENT_DIR/*"` always stays.**
+With `--test / -t`: remove test dir exclusions; `$CURRENT_DIR` always stays.
 
-### Windows (PowerShell 5.1+)
-
-**Default (current dir + test dirs excluded):**
+**Windows (PowerShell):**
 
 ```powershell
-$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
-           ".cursorrules",".windsurfrules",".clinerules",
-           "copilot-instructions.md")
 $currentDir  = (Get-Location).Path
 $exclude     = 'node_modules|\.git|vendor|dist|build|__pycache__'
 $excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
+$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
+           ".cursorrules",".windsurfrules",".clinerules",
+           "copilot-instructions.md")
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -notlike "$currentDir*" -and
                  $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
-
-# Cursor MDC
-Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
-  -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
-                 $_.FullName -notlike "$currentDir*" -and
-                 $_.FullName -notmatch $exclude -and
-                 $_.FullName -notmatch $excludeTest }
 ```
 
-**With `--test` / `-t`: remove `-and $_.FullName -notmatch $excludeTest`. `-notlike "$currentDir*"` always stays.**
+With `--test / -t`: remove `$excludeTest` condition; others stay.
 
-Read every discovered file. Record its path, source agent, and full content.
+---
+
+### 1.3 Cached check mode
+
+Skip `find ~`. Check mtime of paths already in manifest:
+
+**Unix / macOS:**
+
+```bash
+python3 -c "
+import json, os, sys
+m = json.load(open(sys.argv[1]))
+changed = []
+for path, stored_mtime in m['sources'].items():
+    if not os.path.exists(path):
+        changed.append(('removed', path))
+    elif int(os.path.getmtime(path)) != stored_mtime:
+        changed.append(('modified', path))
+print(json.dumps(changed))
+" "$HOME/.claude/merge-rules.manifest.json"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$manifest = Get-Content $manifestPath | ConvertFrom-Json
+$changed  = @()
+foreach ($entry in $manifest.sources.PSObject.Properties) {
+    $path  = $entry.Name
+    $mtime = $entry.Value
+    $item  = Get-Item $path -ErrorAction SilentlyContinue
+    if (-not $item) { $changed += @{status="removed"; path=$path} }
+    elseif ([int]$item.LastWriteTimeUtc.Subtract([datetime]'1970-01-01').TotalSeconds -ne $mtime) {
+        $changed += @{status="modified"; path=$path}
+    }
+}
+```
+
+**Decision:**
+
+```
+if changed is empty:
+    → print "No rule files changed. Skipping merge. (use --refresh to scan for new files)"
+    → EXIT (do not enter Phase 2)
+else:
+    → print list of changed/removed files
+    → use manifest paths as discovered_files, continue to Phase 2
+    → NOTE: new rule files added since last --refresh will NOT be found in this mode
+```
+
+---
+
+Read every file in `discovered_files`. Record its path, source agent, and full content.
 
 ---
 
@@ -229,6 +309,37 @@ Constraints:
 - BASE rules ≤ 40, SPEC rules ≤ 30
 - Never store absolute paths, tokens, or personal information
 - Rules must be agent-agnostic; formatting is applied only at init time
+
+### 3.1 Write manifest
+
+Immediately after writing `merge-rules.md`, write the manifest:
+
+**Unix / macOS:**
+
+```bash
+python3 -c "
+import json, os, sys
+paths = sys.argv[1:]
+sources = {p: int(os.path.getmtime(p)) for p in paths if os.path.exists(p)}
+manifest = {'generated': __import__('datetime').datetime.utcnow().isoformat()+'Z',
+            'sources': sources}
+print(json.dumps(manifest, indent=2))
+" $DISCOVERED_FILES > "$HOME/.claude/merge-rules.manifest.json"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$sources = @{}
+foreach ($path in $discoveredFiles) {
+    $item = Get-Item $path -ErrorAction SilentlyContinue
+    if ($item) {
+        $sources[$path] = [int]$item.LastWriteTimeUtc.Subtract([datetime]'1970-01-01').TotalSeconds
+    }
+}
+@{ generated = (Get-Date).ToUniversalTime().ToString("o"); sources = $sources } |
+    ConvertTo-Json -Depth 3 | Set-Content $manifestPath
+```
 
 ---
 

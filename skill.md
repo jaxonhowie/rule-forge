@@ -12,7 +12,9 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 | 命令 | 操作 |
 |---|---|
-| `/merge-rules` | 发现 + 合并 + 分类 → 写入 `~/.claude/merge-rules.md`（排除测试目录） |
+| `/merge-rules` | 增量检查 → 有变更时合并 → 写入 `~/.claude/merge-rules.md` |
+| `/merge-rules --refresh` | 强制全量重新扫描（可发现新增文件） |
+| `/merge-rules -r` | `--refresh` 的短别名 |
 | `/merge-rules --test` | 同上，但**包含**测试目录中的规则文件 |
 | `/merge-rules -t` | `--test` 的短别名 |
 | `/merge-rules init` | 应用到当前项目（默认 `--scope base`） |
@@ -48,6 +50,7 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 | 参数 | 短别名 | 默认值 | 作用阶段 |
 |---|---|---|---|
+| `--refresh` | `-r` | 关闭 | 阶段 1：强制全量扫描，忽略 manifest |
 | `--test` | `-t` | 关闭 | 阶段 1：是否扫描测试目录 |
 | `--scope base\|spec\|all` | `-s` | `base` | 阶段 4：注入规则范围（仅 `init`） |
 | `--agent <name>` | — | 自动检测 | 阶段 4：目标代理（仅 `init`） |
@@ -65,19 +68,54 @@ uname -s 2>/dev/null || echo "Windows"
 
 ---
 
-## 阶段 1 — 发现
+## 阶段 1 — 发现（增量模式）
 
-**始终排除当前工作目录**（`$PWD`），防止正在开发的项目规则文件污染全局合并结果。
+**固定排除规则（任何模式下均生效）：**
+- 当前工作目录 `$PWD`（防止循环污染）
+- `node_modules/` · `.git/` · `vendor/` · `dist/` · `build/` · `__pycache__/`
+- 测试目录（仅默认模式）：`tests/` · `test/` · `__tests__/` · `fixtures/` · `spec/` · `specs/`
 
-默认还排除以下测试相关目录（`--test` / `-t` 未指定时）：
+---
+
+### Manifest 路径
+
+| 系统 | 路径 |
+|---|---|
+| macOS / Linux | `~/.claude/merge-rules.manifest.json` |
+| Windows | `%APPDATA%\Claude\merge-rules.manifest.json` |
+
+Manifest 格式：
+
+```json
+{
+  "generated": "ISO-DATE",
+  "sources": {
+    "/absolute/path/to/CLAUDE.md": 1746600000,
+    "/absolute/path/to/.cursorrules": 1746500000
+  }
+}
+```
+
+`sources` 的值为文件的 **Unix mtime 时间戳**（整数秒）。
+
+---
+
+### 1.1 决策：缓存模式 vs 全量模式
 
 ```
-tests/  test/  __tests__/  fixtures/  spec/  specs/
+if manifest 不存在 OR --refresh / -r 被指定:
+    → 全量扫描模式（1.2）
+else:
+    → 缓存检查模式（1.3）
 ```
 
-### Unix / macOS（bash / zsh）
+---
 
-**默认（排除当前目录 + 测试目录）：**
+### 1.2 全量扫描模式
+
+运行 `find ~`（`--refresh` 或首次运行）：
+
+**Unix / macOS：**
 
 ```bash
 CURRENT_DIR="$(pwd)"
@@ -115,38 +153,85 @@ find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
   2>/dev/null
 ```
 
-**指定 `--test` / `-t` 时，去掉所有 `! -path "*/test*/*"` 和 `! -path "*/fixtures/*"` 排除项，其余（含 `$CURRENT_DIR`）不变。**
+`--test / -t` 时去掉所有测试目录的排除项，`$CURRENT_DIR` 始终保留。
 
-### Windows（PowerShell 5.1+）
-
-**默认（排除当前目录 + 测试目录）：**
+**Windows（PowerShell）：**
 
 ```powershell
-$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
-           ".cursorrules",".windsurfrules",".clinerules",
-           "copilot-instructions.md")
 $currentDir  = (Get-Location).Path
 $exclude     = 'node_modules|\.git|vendor|dist|build|__pycache__'
 $excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
+$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
+           ".cursorrules",".windsurfrules",".clinerules",
+           "copilot-instructions.md")
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -notlike "$currentDir*" -and
                  $_.FullName -notmatch $exclude -and
                  $_.FullName -notmatch $excludeTest }
-
-# Cursor MDC
-Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
-  -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
-                 $_.FullName -notlike "$currentDir*" -and
-                 $_.FullName -notmatch $exclude -and
-                 $_.FullName -notmatch $excludeTest }
 ```
 
-**指定 `--test` / `-t` 时，移除 `-and $_.FullName -notmatch $excludeTest` 条件；`-notlike "$currentDir*"` 始终保留。**
+`--test / -t` 时移除 `$excludeTest` 条件，其余保留。
 
-读取每个发现的文件，记录其路径、来源代理和完整内容。
+---
+
+### 1.3 缓存检查模式
+
+不运行 `find ~`，直接检查 manifest 里已知文件的 mtime：
+
+**Unix / macOS：**
+
+```bash
+MANIFEST_PATH="$HOME/.claude/merge-rules.manifest.json"
+CHANGED=0
+
+# 从 manifest 读取每条路径和存储的 mtime
+# 对每个 path:
+python3 -c "
+import json, os, sys
+m = json.load(open(sys.argv[1]))
+changed = []
+for path, stored_mtime in m['sources'].items():
+    if not os.path.exists(path):
+        changed.append(('removed', path))
+    elif int(os.path.getmtime(path)) != stored_mtime:
+        changed.append(('modified', path))
+print(json.dumps(changed))
+" "$MANIFEST_PATH"
+```
+
+**Windows（PowerShell）：**
+
+```powershell
+$manifest = Get-Content $manifestPath | ConvertFrom-Json
+$changed  = @()
+foreach ($entry in $manifest.sources.PSObject.Properties) {
+    $path  = $entry.Name
+    $mtime = $entry.Value
+    $item  = Get-Item $path -ErrorAction SilentlyContinue
+    if (-not $item) { $changed += @{status="removed"; path=$path} }
+    elseif ([int]$item.LastWriteTimeUtc.Subtract([datetime]'1970-01-01').TotalSeconds -ne $mtime) {
+        $changed += @{status="modified"; path=$path}
+    }
+}
+```
+
+**判断结果：**
+
+```
+if changed 为空:
+    → 打印 "规则文件未变更，跳过合并（使用 --refresh 扫描新增文件）"
+    → EXIT（不进入阶段 2）
+else:
+    → 打印变更列表（新增/修改/删除的文件）
+    → 使用 manifest 中的路径作为 discovered_files，继续阶段 2
+    → 注意：缓存模式无法发现新增文件，需 --refresh
+```
+
+---
+
+读取每个 discovered_files 中的文件，记录其路径、来源代理和完整内容。
 
 ---
 
@@ -231,6 +316,37 @@ Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
 - BASE 规则总数 ≤ 40，SPEC 规则总数 ≤ 30
 - 绝不存储绝对路径、令牌或个人信息
 - 规则必须与代理无关；格式仅在初始化时应用
+
+### 3.1 写入 manifest
+
+`merge-rules.md` 写入成功后，立即写入 manifest：
+
+**Unix / macOS：**
+
+```bash
+python3 -c "
+import json, os, sys
+paths = sys.argv[1:]
+sources = {p: int(os.path.getmtime(p)) for p in paths if os.path.exists(p)}
+manifest = {'generated': __import__('datetime').datetime.utcnow().isoformat()+'Z',
+            'sources': sources}
+print(json.dumps(manifest, indent=2))
+" $DISCOVERED_FILES > "$HOME/.claude/merge-rules.manifest.json"
+```
+
+**Windows（PowerShell）：**
+
+```powershell
+$sources = @{}
+foreach ($path in $discoveredFiles) {
+    $item = Get-Item $path -ErrorAction SilentlyContinue
+    if ($item) {
+        $sources[$path] = [int]$item.LastWriteTimeUtc.Subtract([datetime]'1970-01-01').TotalSeconds
+    }
+}
+@{ generated = (Get-Date).ToUniversalTime().ToString("o"); sources = $sources } |
+    ConvertTo-Json -Depth 3 | Set-Content $manifestPath
+```
 
 ---
 

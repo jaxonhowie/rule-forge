@@ -44,8 +44,12 @@
 ## 使用方法
 
 ```bash
-# 扫描全机 → 合并分类 → 生成 ~/.claude/merge-rules.md（自动排除测试目录）
+# 增量检查 → 有变更时合并 → 生成 ~/.claude/merge-rules.md
 /merge-rules
+
+# 强制全量重新扫描（可发现新增文件）
+/merge-rules --refresh
+/merge-rules -r
 
 # 包含测试目录中的规则文件（tests/ fixtures/ spec/ 等）
 /merge-rules --test
