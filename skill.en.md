@@ -12,7 +12,9 @@ description: Discover all agent rule files on this machine, merge and deduplicat
 
 | Command | Action |
 |---|---|
-| `/merge-rules` | Full discovery + merge + classify → write `~/.claude/merge-rules.md` |
+| `/merge-rules` | Discover + merge + classify → write `~/.claude/merge-rules.md` (test dirs excluded) |
+| `/merge-rules --test` | Same, but **include** rule files inside test directories |
+| `/merge-rules -t` | Short alias for `--test` |
 | `/merge-rules init` | Apply to current project (default `--scope base`) |
 | `/merge-rules init --scope base` | Inject BASE rules only (universal behavior, default) |
 | `/merge-rules init --scope spec` | Inject SPEC rules only (tech-stack specific) |
@@ -38,9 +40,19 @@ description: Discover all agent rule files on this machine, merge and deduplicat
 
 ---
 
-## Phase 0 — Detect OS
+## Phase 0 — Parse arguments & detect OS
 
-Run before anything else:
+### Argument parsing
+
+Extract all flags before any operations:
+
+| Flag | Alias | Default | Used in |
+|---|---|---|---|
+| `--test` | `-t` | off | Phase 1: include test directories in discovery |
+| `--scope base\|spec\|all` | `-s` | `base` | Phase 4: rule scope filter (`init` only) |
+| `--agent <name>` | — | auto-detect | Phase 4: target agent (`init` only) |
+
+### Detect OS
 
 ```bash
 uname -s 2>/dev/null || echo "Windows"
@@ -53,7 +65,15 @@ uname -s 2>/dev/null || echo "Windows"
 
 ## Phase 1 — Discovery
 
+The following test-related directories are excluded by default (omit exclusions when `--test` / `-t` is set):
+
+```
+tests/  test/  __tests__/  fixtures/  spec/  specs/
+```
+
 ### Unix / macOS (bash / zsh)
+
+**Default (test dirs excluded):**
 
 ```bash
 find ~ -maxdepth 10 \( \
@@ -72,31 +92,48 @@ find ~ -maxdepth 10 \( \
   ! -path "*/dist/*" \
   ! -path "*/build/*" \
   ! -path "*/__pycache__/*" \
+  ! -path "*/tests/*" \
+  ! -path "*/test/*" \
+  ! -path "*/__tests__/*" \
+  ! -path "*/fixtures/*" \
+  ! -path "*/spec/*" \
+  ! -path "*/specs/*" \
   2>/dev/null
 
 # Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
-  ! -path "*/node_modules/*" ! -path "*/.git/*" 2>/dev/null
+  ! -path "*/node_modules/*" ! -path "*/.git/*" \
+  ! -path "*/tests/*" ! -path "*/test/*" ! -path "*/fixtures/*" \
+  2>/dev/null
 ```
 
+**With `--test` / `-t`: remove all `! -path "*/test*/*"` and `! -path "*/fixtures/*"` exclusions. All other filters remain.**
+
 ### Windows (PowerShell 5.1+)
+
+**Default (test dirs excluded):**
 
 ```powershell
 $names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
            ".cursorrules",".windsurfrules",".clinerules",
            "copilot-instructions.md")
 $exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+$excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -notmatch $exclude }
+  Where-Object { $_.FullName -notmatch $exclude -and
+                 $_.FullName -notmatch $excludeTest }
 
 # Cursor MDC
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
-                 $_.FullName -notmatch $exclude }
+                 $_.FullName -notmatch $exclude -and
+                 $_.FullName -notmatch $excludeTest }
 ```
+
+**With `--test` / `-t`: remove `-and $_.FullName -notmatch $excludeTest`. All other filters remain.**
 
 Read every discovered file. Record its path, source agent, and full content.
 
@@ -187,15 +224,6 @@ Constraints:
 ---
 
 ## Phase 4 — Project Init (`init` arg)
-
-### 4.0 Parse arguments
-
-Extract optional flags from the command:
-
-| Flag | Alias | Default | Description |
-|---|---|---|---|
-| `--scope base\|spec\|all` | `-s` | `base` | Which rule scope to inject |
-| `--agent <name>` | — | auto-detect | Target agent |
 
 ### 4.1 Detect agent context
 

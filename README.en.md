@@ -44,8 +44,12 @@ Merged rules are split into two scopes:
 ## Usage
 
 ```bash
-# Scan machine → merge + classify → write ~/.claude/merge-rules.md
+# Scan machine → merge + classify → write ~/.claude/merge-rules.md (test dirs excluded)
 /merge-rules
+
+# Include rule files found inside test directories (tests/ fixtures/ spec/ etc.)
+/merge-rules --test
+/merge-rules -t
 
 # Init project (BASE rules only by default)
 /merge-rules init

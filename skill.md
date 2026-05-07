@@ -12,7 +12,9 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 | 命令 | 操作 |
 |---|---|
-| `/merge-rules` | 完整发现 + 合并 + 分类 → 写入 `~/.claude/merge-rules.md` |
+| `/merge-rules` | 发现 + 合并 + 分类 → 写入 `~/.claude/merge-rules.md`（排除测试目录） |
+| `/merge-rules --test` | 同上，但**包含**测试目录中的规则文件 |
+| `/merge-rules -t` | `--test` 的短别名 |
 | `/merge-rules init` | 应用到当前项目（默认 `--scope base`） |
 | `/merge-rules init --scope base` | 仅注入 BASE 规则（通用行为，默认值） |
 | `/merge-rules init --scope spec` | 仅注入 SPEC 规则（技术栈专属） |
@@ -38,7 +40,19 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 ---
 
-## 阶段 0 — 检测操作系统
+## 阶段 0 — 解析参数 & 检测操作系统
+
+### 参数解析
+
+在执行任何操作前，从命令中提取所有参数：
+
+| 参数 | 短别名 | 默认值 | 作用阶段 |
+|---|---|---|---|
+| `--test` | `-t` | 关闭 | 阶段 1：是否扫描测试目录 |
+| `--scope base\|spec\|all` | `-s` | `base` | 阶段 4：注入规则范围（仅 `init`） |
+| `--agent <name>` | — | 自动检测 | 阶段 4：目标代理（仅 `init`） |
+
+### 检测操作系统
 
 执行前先判断运行环境：
 
@@ -53,7 +67,15 @@ uname -s 2>/dev/null || echo "Windows"
 
 ## 阶段 1 — 发现
 
+默认排除以下测试相关目录（`--test` / `-t` 未指定时）：
+
+```
+tests/  test/  __tests__/  fixtures/  spec/  specs/
+```
+
 ### Unix / macOS（bash / zsh）
+
+**默认（排除测试目录）：**
 
 ```bash
 find ~ -maxdepth 10 \( \
@@ -72,31 +94,48 @@ find ~ -maxdepth 10 \( \
   ! -path "*/dist/*" \
   ! -path "*/build/*" \
   ! -path "*/__pycache__/*" \
+  ! -path "*/tests/*" \
+  ! -path "*/test/*" \
+  ! -path "*/__tests__/*" \
+  ! -path "*/fixtures/*" \
+  ! -path "*/spec/*" \
+  ! -path "*/specs/*" \
   2>/dev/null
 
 # Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
-  ! -path "*/node_modules/*" ! -path "*/.git/*" 2>/dev/null
+  ! -path "*/node_modules/*" ! -path "*/.git/*" \
+  ! -path "*/tests/*" ! -path "*/test/*" ! -path "*/fixtures/*" \
+  2>/dev/null
 ```
 
+**指定 `--test` / `-t` 时，去掉所有 `! -path "*/test*/*"` 和 `! -path "*/fixtures/*"` 排除项，其余不变。**
+
 ### Windows（PowerShell 5.1+）
+
+**默认（排除测试目录）：**
 
 ```powershell
 $names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
            ".cursorrules",".windsurfrules",".clinerules",
            "copilot-instructions.md")
 $exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+$excludeTest = 'tests[/\\]|test[/\\]|__tests__[/\\]|fixtures[/\\]|specs?[/\\]'
 
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
   -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -notmatch $exclude }
+  Where-Object { $_.FullName -notmatch $exclude -and
+                 $_.FullName -notmatch $excludeTest }
 
 # Cursor MDC
 Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
   -ErrorAction SilentlyContinue |
   Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
-                 $_.FullName -notmatch $exclude }
+                 $_.FullName -notmatch $exclude -and
+                 $_.FullName -notmatch $excludeTest }
 ```
+
+**指定 `--test` / `-t` 时，移除 `-and $_.FullName -notmatch $excludeTest` 条件，其余不变。**
 
 读取每个发现的文件，记录其路径、来源代理和完整内容。
 
@@ -187,15 +226,6 @@ Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
 ---
 
 ## 阶段 4 — 项目初始化（`init` 参数）
-
-### 4.0 解析参数
-
-从命令中提取以下参数（均为可选）：
-
-| 参数 | 短别名 | 默认值 | 说明 |
-|---|---|---|---|
-| `--scope base\|spec\|all` | `-s` | `base` | 注入的规则范围 |
-| `--agent <name>` | — | 自动检测 | 目标代理 |
 
 ### 4.1 检测代理上下文
 
