@@ -34,19 +34,32 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 ---
 
+## 阶段 0 — 检测操作系统
+
+执行前先判断运行环境：
+
+```bash
+uname -s 2>/dev/null || echo "Windows"
+```
+
+- 输出包含 `Linux` 或 `Darwin` → **Unix 模式**
+- 输出 `Windows` 或命令不存在 → **Windows 模式**
+
+---
+
 ## 阶段 1 — 发现
 
-扫描本机上所有已知的规则文件：
+### Unix / macOS（bash / zsh）
 
 ```bash
 find ~ -maxdepth 10 \( \
-  -name "CLAUDE.md"     -o \
-  -name "AGENTS.md"     -o \
-  -name "GEMINI.md"     -o \
+  -name "CLAUDE.md"      -o \
+  -name "AGENTS.md"      -o \
+  -name "GEMINI.md"      -o \
   -name "CONVENTIONS.md" -o \
-  -name ".cursorrules"  -o \
+  -name ".cursorrules"   -o \
   -name ".windsurfrules" -o \
-  -name ".clinerules"   -o \
+  -name ".clinerules"    -o \
   -name "copilot-instructions.md" \
 \) \
   ! -path "*/node_modules/*" \
@@ -56,13 +69,29 @@ find ~ -maxdepth 10 \( \
   ! -path "*/build/*" \
   ! -path "*/__pycache__/*" \
   2>/dev/null
-```
 
-同时扫描 Cursor MDC 规则：
-
-```bash
+# Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
   ! -path "*/node_modules/*" ! -path "*/.git/*" 2>/dev/null
+```
+
+### Windows（PowerShell 5.1+）
+
+```powershell
+$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
+           ".cursorrules",".windsurfrules",".clinerules",
+           "copilot-instructions.md")
+$exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+
+Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
+  -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -notmatch $exclude }
+
+# Cursor MDC
+Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
+  -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
+                 $_.FullName -notmatch $exclude }
 ```
 
 读取每个发现的文件，记录其路径、来源代理和完整内容。
@@ -100,7 +129,14 @@ find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
 
 ---
 
-## 阶段 3 — 写入 `~/.claude/merge-rules.md`
+## 阶段 3 — 写入 merge-rules.md
+
+存储路径因操作系统而异：
+
+| 系统 | 路径 |
+|---|---|
+| macOS / Linux | `~/.claude/merge-rules.md` |
+| Windows | `%APPDATA%\Claude\merge-rules.md` |
 
 ```markdown
 # merge-rules
@@ -156,7 +192,7 @@ find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
 
 ### 4.3 加载 merge-rules.md
 
-加载 `~/.claude/merge-rules.md`。如果文件不存在，先运行阶段 1–3。
+按操作系统加载对应路径的 merge-rules.md（macOS/Linux：`~/.claude/merge-rules.md`；Windows：`%APPDATA%\Claude\merge-rules.md`）。如果文件不存在，先运行阶段 0–3。
 
 ### 4.4 渲染代理专属输出
 

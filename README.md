@@ -35,9 +35,16 @@
 
 Claude Code skill 需要放在 **目录 + `SKILL.md`** 的结构下：
 
+**macOS / Linux**
 ```bash
 mkdir -p ~/.claude/skills/merge-rules
 cp skill.md ~/.claude/skills/merge-rules/SKILL.md
+```
+
+**Windows（PowerShell）**
+```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\Claude\skills\merge-rules"
+Copy-Item skill.md "$env:APPDATA\Claude\skills\merge-rules\SKILL.md"
 ```
 
 重启 Claude Code 后，`/merge-rules` 即可使用。

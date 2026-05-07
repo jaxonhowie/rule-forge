@@ -34,19 +34,32 @@ description: Discover all agent rule files on this machine, merge and deduplicat
 
 ---
 
+## Phase 0 — Detect OS
+
+Run before anything else:
+
+```bash
+uname -s 2>/dev/null || echo "Windows"
+```
+
+- Output contains `Linux` or `Darwin` → **Unix mode**
+- Output is `Windows` or command not found → **Windows mode**
+
+---
+
 ## Phase 1 — Discovery
 
-Scan the machine for all known rule files:
+### Unix / macOS (bash / zsh)
 
 ```bash
 find ~ -maxdepth 10 \( \
-  -name "CLAUDE.md"     -o \
-  -name "AGENTS.md"     -o \
-  -name "GEMINI.md"     -o \
+  -name "CLAUDE.md"      -o \
+  -name "AGENTS.md"      -o \
+  -name "GEMINI.md"      -o \
   -name "CONVENTIONS.md" -o \
-  -name ".cursorrules"  -o \
+  -name ".cursorrules"   -o \
   -name ".windsurfrules" -o \
-  -name ".clinerules"   -o \
+  -name ".clinerules"    -o \
   -name "copilot-instructions.md" \
 \) \
   ! -path "*/node_modules/*" \
@@ -56,13 +69,29 @@ find ~ -maxdepth 10 \( \
   ! -path "*/build/*" \
   ! -path "*/__pycache__/*" \
   2>/dev/null
-```
 
-Also scan for Cursor MDC rules:
-
-```bash
+# Cursor MDC
 find ~ -maxdepth 10 -path "*/.cursor/rules/*.mdc" \
   ! -path "*/node_modules/*" ! -path "*/.git/*" 2>/dev/null
+```
+
+### Windows (PowerShell 5.1+)
+
+```powershell
+$names = @("CLAUDE.md","AGENTS.md","GEMINI.md","CONVENTIONS.md",
+           ".cursorrules",".windsurfrules",".clinerules",
+           "copilot-instructions.md")
+$exclude = 'node_modules|\.git|vendor|dist|build|__pycache__'
+
+Get-ChildItem -Path $HOME -Recurse -Depth 10 -Include $names `
+  -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -notmatch $exclude }
+
+# Cursor MDC
+Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
+  -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -match '\.cursor[/\\]rules' -and
+                 $_.FullName -notmatch $exclude }
 ```
 
 Read every discovered file. Record its path, source agent, and full content.
@@ -100,7 +129,14 @@ Priority order: **safer > more general > more specific**
 
 ---
 
-## Phase 3 — Write `~/.claude/merge-rules.md`
+## Phase 3 — Write merge-rules.md
+
+Storage path varies by OS:
+
+| OS | Path |
+|---|---|
+| macOS / Linux | `~/.claude/merge-rules.md` |
+| Windows | `%APPDATA%\Claude\merge-rules.md` |
 
 ```markdown
 # merge-rules
@@ -156,7 +192,7 @@ Check for: `package.json` · `Cargo.toml` · `pyproject.toml` · `go.mod` · `Ge
 
 ### 4.3 Load merge-rules.md
 
-Load `~/.claude/merge-rules.md`. If it doesn't exist, run Phase 1–3 first.
+Load merge-rules.md from the OS-appropriate path (macOS/Linux: `~/.claude/merge-rules.md`; Windows: `%APPDATA%\Claude\merge-rules.md`). If it doesn't exist, run Phase 0–3 first.
 
 ### 4.4 Render agent-specific output
 
