@@ -1,21 +1,18 @@
 # merge-rules
-<!-- generated: {ANY} | sources: 3 files | rules: {ANY} -->
+<!-- generated: {ANY} | sources: 3 files | base: {B} | spec: {S} -->
 
-## General
+## BASE
+
 - Prefer `const` over `let`; avoid mutation by default.
 - Use descriptive names for variables and functions.
 - Avoid deeply nested logic; prefer early returns.
-
-## Code Quality
 - Keep functions small; each should do one thing.
 - Use `async`/`await`; avoid promise chains or callbacks.
-- Never use `any` in TypeScript; use proper types.
-- Enable TypeScript strict mode in all projects.
-
-## Safety
+- Run the full test suite before opening a pull request.
 - Never commit secrets, tokens, or credentials.
 - Validate all user input at system boundaries.
 
-## Testing
-- Write tests for every public function.
-- Run the full test suite before opening a pull request.
+## SPEC
+
+- Enable TypeScript strict mode in all projects.
+- Never use `any` in TypeScript; use proper types.

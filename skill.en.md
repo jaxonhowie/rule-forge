@@ -12,10 +12,14 @@ description: Discover all agent rule files on this machine, merge and deduplicat
 
 | Command | Action |
 |---|---|
-| `/merge-rules` | Full discovery + merge → write `~/.claude/merge-rules.md` |
-| `/merge-rules init` | Apply `merge-rules.md` to current project |
+| `/merge-rules` | Full discovery + merge + classify → write `~/.claude/merge-rules.md` |
+| `/merge-rules init` | Apply to current project (default `--scope base`) |
+| `/merge-rules init --scope base` | Inject BASE rules only (universal behavior, default) |
+| `/merge-rules init --scope spec` | Inject SPEC rules only (tech-stack specific) |
+| `/merge-rules init --scope all` | Inject BASE + SPEC rules |
+| `/merge-rules init -s <scope>` | Short alias for `--scope` |
 | `/merge-rules init --agent <name>` | Force a specific agent target |
-| `/merge-rules status` | Show source count, last merge date, rule count |
+| `/merge-rules status` | Show source count, BASE/SPEC rule counts, last merge date |
 
 ---
 
@@ -127,6 +131,29 @@ Priority order: **safer > more general > more specific**
 - No explanations, no rationale, no examples
 - Max 12 words per rule
 
+**2.7 Classify (BASE vs SPEC)**
+
+Lowercase each rule and check for the following keywords. Any match → **SPEC**; otherwise → **BASE**.
+
+| Category | Keywords |
+|---|---|
+| Languages | `typescript` `javascript` `python` `rust` `go` `java` `kotlin` `swift` |
+| Frameworks | `react` `nextjs` `next.js` `vue` `svelte` `fastapi` `nestjs` `express` `django` `spring` |
+| Tooling | `pnpm` `npm` `yarn` `webpack` `vite` `eslint` `prettier` `tailwind` `prisma` `docker` `kubernetes` |
+| Architecture | `ddd` `cqrs` `microservice` `monorepo` `mvc` |
+
+**BASE examples** (no keywords matched):
+- Write clean, readable code
+- Keep functions focused and small
+- Run tests before committing
+- Never expose secrets or credentials
+
+**SPEC examples** (keyword matched):
+- Use TypeScript strict mode
+- Prefer React hooks over class components
+- Use pnpm as the package manager
+- Apply Tailwind utility classes for styling
+
 ---
 
 ## Phase 3 — Write merge-rules.md
@@ -140,34 +167,35 @@ Storage path varies by OS:
 
 ```markdown
 # merge-rules
-<!-- generated: {ISO-DATE} | sources: {N} files | rules: {R} -->
+<!-- generated: {ISO-DATE} | sources: {N} files | base: {B} | spec: {S} -->
 
-## General
+## BASE
+- (universal agent behavior rules)
 - ...
 
-## Code Quality
-- ...
-
-## Safety
-- ...
-
-## Workflow
-- ...
-
-## Testing
+## SPEC
+- (tech-stack / project-specific rules)
 - ...
 ```
 
 Constraints:
-- Group rules by theme (General / Code Quality / Safety / Workflow / Testing / Naming / Git)
-- Max 8 rules per group
-- Total rules ≤ 60
+- Exactly two top-level sections: `BASE` and `SPEC`
+- BASE rules ≤ 40, SPEC rules ≤ 30
 - Never store absolute paths, tokens, or personal information
 - Rules must be agent-agnostic; formatting is applied only at init time
 
 ---
 
 ## Phase 4 — Project Init (`init` arg)
+
+### 4.0 Parse arguments
+
+Extract optional flags from the command:
+
+| Flag | Alias | Default | Description |
+|---|---|---|---|
+| `--scope base\|spec\|all` | `-s` | `base` | Which rule scope to inject |
+| `--agent <name>` | — | auto-detect | Target agent |
 
 ### 4.1 Detect agent context
 
@@ -190,9 +218,17 @@ Otherwise, detect by presence of existing files (first match wins):
 
 Check for: `package.json` · `Cargo.toml` · `pyproject.toml` · `go.mod` · `Gemfile` · `pom.xml` · `build.gradle`
 
-### 4.3 Load merge-rules.md
+### 4.3 Load and filter by scope
 
 Load merge-rules.md from the OS-appropriate path (macOS/Linux: `~/.claude/merge-rules.md`; Windows: `%APPDATA%\Claude\merge-rules.md`). If it doesn't exist, run Phase 0–3 first.
+
+Filter rules according to `--scope`:
+
+| scope | Rules to inject |
+|---|---|
+| `base` (default) | `## BASE` only |
+| `spec` | `## SPEC` only |
+| `all` | `## BASE` + `## SPEC` |
 
 ### 4.4 Render agent-specific output
 
@@ -247,4 +283,5 @@ Before writing any file, verify:
 - [ ] No rule exceeds 12 words
 - [ ] No personal/sensitive data
 - [ ] Rules are imperative (start with a verb)
-- [ ] Groups are coherent and non-overlapping
+- [ ] Each rule is in the correct scope (BASE has no tech keywords; SPEC has one)
+- [ ] init output contains only the requested scope's rules

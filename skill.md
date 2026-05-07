@@ -12,10 +12,14 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 | 命令 | 操作 |
 |---|---|
-| `/merge-rules` | 完整发现 + 合并 → 写入 `~/.claude/merge-rules.md` |
-| `/merge-rules init` | 将 `merge-rules.md` 应用到当前项目 |
+| `/merge-rules` | 完整发现 + 合并 + 分类 → 写入 `~/.claude/merge-rules.md` |
+| `/merge-rules init` | 应用到当前项目（默认 `--scope base`） |
+| `/merge-rules init --scope base` | 仅注入 BASE 规则（通用行为，默认值） |
+| `/merge-rules init --scope spec` | 仅注入 SPEC 规则（技术栈专属） |
+| `/merge-rules init --scope all` | 注入 BASE + SPEC 全部规则 |
+| `/merge-rules init -s <scope>` | `--scope` 的短别名 |
 | `/merge-rules init --agent <name>` | 强制指定目标代理 |
-| `/merge-rules status` | 显示来源数量、上次合并日期、规则数量 |
+| `/merge-rules status` | 显示来源数量、BASE/SPEC 规则数量、上次合并日期 |
 
 ---
 
@@ -127,6 +131,29 @@ Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
 - 无解释、无理由、无示例
 - 每条规则最多 12 个英文单词
 
+**2.7 分类（BASE vs SPEC）**
+
+将规则转为小写，逐条检查是否包含以下关键词。命中任意一个 → **SPEC**；否则 → **BASE**。
+
+| 类别 | 关键词 |
+|---|---|
+| 语言 | `typescript` `javascript` `python` `rust` `go` `java` `kotlin` `swift` |
+| 框架 | `react` `nextjs` `next.js` `vue` `svelte` `fastapi` `nestjs` `express` `django` `spring` |
+| 工具链 | `pnpm` `npm` `yarn` `webpack` `vite` `eslint` `prettier` `tailwind` `prisma` `docker` `kubernetes` |
+| 架构 | `ddd` `cqrs` `microservice` `monorepo` `mvc` |
+
+**BASE 示例**（不含上述关键词）：
+- Write clean, readable code
+- Keep functions focused and small
+- Run tests before committing
+- Never expose secrets or credentials
+
+**SPEC 示例**（含关键词）：
+- Use TypeScript strict mode
+- Prefer React hooks over class components
+- Use pnpm as the package manager
+- Apply Tailwind utility classes for styling
+
 ---
 
 ## 阶段 3 — 写入 merge-rules.md
@@ -140,34 +167,35 @@ Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
 
 ```markdown
 # merge-rules
-<!-- generated: {ISO-DATE} | sources: {N} files | rules: {R} -->
+<!-- generated: {ISO-DATE} | sources: {N} files | base: {B} | spec: {S} -->
 
-## General
+## BASE
+- (通用行为规则)
 - ...
 
-## Code Quality
-- ...
-
-## Safety
-- ...
-
-## Workflow
-- ...
-
-## Testing
+## SPEC
+- (技术栈/项目专属规则)
 - ...
 ```
 
 约束条件：
-- 按主题分组（General / Code Quality / Safety / Workflow / Testing / Naming / Git）
-- 每组最多 8 条规则
-- 规则总数 ≤ 60
+- 只有两个顶级分组：`BASE` 和 `SPEC`
+- BASE 规则总数 ≤ 40，SPEC 规则总数 ≤ 30
 - 绝不存储绝对路径、令牌或个人信息
 - 规则必须与代理无关；格式仅在初始化时应用
 
 ---
 
 ## 阶段 4 — 项目初始化（`init` 参数）
+
+### 4.0 解析参数
+
+从命令中提取以下参数（均为可选）：
+
+| 参数 | 短别名 | 默认值 | 说明 |
+|---|---|---|---|
+| `--scope base\|spec\|all` | `-s` | `base` | 注入的规则范围 |
+| `--agent <name>` | — | 自动检测 | 目标代理 |
 
 ### 4.1 检测代理上下文
 
@@ -190,9 +218,17 @@ Get-ChildItem -Path $HOME -Recurse -Depth 10 -Filter "*.mdc" `
 
 检测以下文件：`package.json` · `Cargo.toml` · `pyproject.toml` · `go.mod` · `Gemfile` · `pom.xml` · `build.gradle`
 
-### 4.3 加载 merge-rules.md
+### 4.3 加载并按 scope 过滤规则
 
 按操作系统加载对应路径的 merge-rules.md（macOS/Linux：`~/.claude/merge-rules.md`；Windows：`%APPDATA%\Claude\merge-rules.md`）。如果文件不存在，先运行阶段 0–3。
+
+根据 `--scope` 参数过滤要注入的规则：
+
+| scope | 注入内容 |
+|---|---|
+| `base`（默认） | 仅 `## BASE` 中的规则 |
+| `spec` | 仅 `## SPEC` 中的规则 |
+| `all` | `## BASE` + `## SPEC` 全部规则 |
 
 ### 4.4 渲染代理专属输出
 
@@ -247,4 +283,5 @@ alwaysApply: true
 - [ ] 每条规则不超过 12 个英文单词
 - [ ] 不包含个人/敏感数据
 - [ ] 规则为祈使句（以动词开头）
-- [ ] 分组连贯且互不重叠
+- [ ] 每条规则归入正确的 scope（BASE 不含技术栈关键词，SPEC 含关键词）
+- [ ] init 输出只包含所请求 scope 的规则
