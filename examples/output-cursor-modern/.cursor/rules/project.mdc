@@ -1,0 +1,36 @@
+---
+description: Project coding rules (saas-app · TypeScript · Express · PostgreSQL)
+alwaysApply: true
+---
+
+## General
+- Solve the actual problem; do not add unrequested features.
+- Make the smallest change that satisfies the requirement.
+- Prefer editing existing files over creating new ones.
+- Ask before deleting or overwriting uncommitted work.
+
+## Code Quality
+- Keep functions under 40 lines; extract if longer.
+- Never use `any` in TypeScript; use `unknown` with type guards.
+- Prefer immutable data; avoid mutations on function arguments.
+- Delete dead code rather than commenting it out.
+
+## Safety
+- Never commit secrets, tokens, or credentials.
+- Validate all input at system boundaries, not internal functions.
+- Never run destructive operations without user confirmation.
+
+## Workflow
+- Run the full test suite before declaring a task complete.
+- Show a diff before overwriting any existing file.
+- Do not skip pre-commit hooks or linters.
+
+## Testing
+- Write tests for every new public function.
+- Use real dependencies in integration tests; avoid mocking internals.
+- Name tests as: `should <behavior> when <condition>`.
+
+## Git
+- Write commit messages in imperative mood, under 72 characters.
+- Never force-push to `main` or `master`.
+- Keep PRs focused; one concern per pull request.

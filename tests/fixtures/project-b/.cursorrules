@@ -1,0 +1,10 @@
+Write unit tests for all new code
+Do not hardcode secrets or tokens in source files
+Always use TypeScript with strict settings enabled
+Functions should do one thing only
+Use async/await, avoid promise chains
+Never assign type any; use proper types
+Always prefer const declarations
+Make sure tests pass before opening a pull request
+Use descriptive variable names
+Avoid deeply nested logic; prefer early returns
