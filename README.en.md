@@ -1,4 +1,4 @@
-# rule-forge
+# merge-rules
 
 A Claude Code skill that discovers, merges, and manages AI coding agent rules across all your projects.
 
