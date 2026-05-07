@@ -78,13 +78,13 @@ Claude Code skills require a **directory + `SKILL.md`** structure:
 **macOS / Linux**
 ```bash
 mkdir -p ~/.claude/skills/merge-rules
-cp skill.md ~/.claude/skills/merge-rules/SKILL.md
+cp SKILL.md ~/.claude/skills/merge-rules/SKILL.md
 ```
 
 **Windows (PowerShell)**
 ```powershell
 New-Item -ItemType Directory -Force "$env:APPDATA\Claude\skills\merge-rules"
-Copy-Item skill.md "$env:APPDATA\Claude\skills\merge-rules\SKILL.md"
+Copy-Item SKILL.md "$env:APPDATA\Claude\skills\merge-rules\SKILL.md"
 ```
 
 Restart Claude Code — `/merge-rules` will be available immediately.
