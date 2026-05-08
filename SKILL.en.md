@@ -78,7 +78,7 @@ Run `uname -s 2>/dev/null || echo Windows` to detect OS; on Windows use PowerShe
 3. **Deduplicate**: exact match → keep one; ≥85% token overlap → keep more concise variant
 4. **Merge similar**: same-topic rules → one imperative sentence, preserving union of constraints
 5. **Conflict resolution**: safer > more general > more specific
-6. **Compress**: short imperative sentence, no explanations/rationale/examples, max 12 words
+6. **Compress**: short imperative sentence, no explanations/rationale/examples, max 12 words; for plain-text agents (Cursor legacy / Windsurf / Cline), strip backticks, `**`, and other Markdown formatting
 7. **Classify (BASE vs SPEC)**: lowercase rule, any keyword match → SPEC; otherwise → BASE
 
 | Category | Keywords |
@@ -148,7 +148,7 @@ Load merge-rules.md (run Phase 0–3 first if missing), filter by scope, write t
 
 Cursor MDC frontmatter: `description: Project coding rules` + `alwaysApply: true`
 
-Prepend project context block when a manifest file is detected: `# Project: {name} ({type})` / `# Stack: {detected}` / `# Agent: {name}`
+Prepend project context block when a project manifest is detected: `# Project: {name} ({type})` / `# Stack: {detected}` / `# Agent: {name}`
 
 If the output file already exists, show a diff and ask for confirmation before overwriting.
 

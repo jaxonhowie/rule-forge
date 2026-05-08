@@ -4,7 +4,7 @@ A Claude Code skill that discovers, merges, and manages AI coding agent rules ac
 
 ## Background
 
-Every time a new project starts, you end up hunting through old repos for `CLAUDE.md`, `.cursorrules`, and similar rule files, then manually reformatting them for the new context. It's repetitive and low-value. rule-forge automates that: scan every rule file on the machine, merge and deduplicate, inject into the new project in one command.
+Every time a new project starts, you end up hunting through old repos for `CLAUDE.md`, `.cursorrules`, and similar rule files, then manually reformatting them for the new context. It's repetitive and low-value. merge-rules automates that: scan every rule file on the machine, merge and deduplicate, inject into the new project in one command.
 
 > This skill was written using **Claude Code + Claude Sonnet 4.6**.
 > Always review the generated output carefully. The correctness and applicability of merged rules are your responsibility — no guarantees are made.
@@ -95,13 +95,19 @@ The `examples/` directory contains a complete end-to-end sample:
 
 ```
 examples/
-├── merge-rules.md              # Output of /merge-rules (BASE + SPEC sections)
+├── merge-rules.md                   # Output of /merge-rules (BASE + SPEC sections)
 ├── output-claude-code/
-│   └── CLAUDE.md               # /merge-rules init (default scope=base)
+│   └── CLAUDE.md                    # /merge-rules init (default scope=base)
 ├── output-cursor/
-│   └── .cursorrules            # /merge-rules init --agent cursor (legacy format)
-└── output-cursor-modern/
-    └── .cursor/rules/project.mdc  # /merge-rules init --agent cursor (MDC format)
+│   └── .cursorrules                 # /merge-rules init --agent cursor (legacy format)
+├── output-cursor-modern/
+│   └── .cursor/rules/project.mdc    # /merge-rules init --agent cursor (MDC format)
+├── output-windsurf/
+│   └── .windsurfrules               # /merge-rules init --agent windsurf (plain text)
+├── output-gemini/
+│   └── GEMINI.md                    # /merge-rules init --agent gemini
+└── output-copilot/
+    └── .github/copilot-instructions.md  # /merge-rules init --agent copilot
 ```
 
 ## Design principles

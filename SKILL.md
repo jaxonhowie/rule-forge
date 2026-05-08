@@ -78,7 +78,7 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 3. **去重**：完全匹配保留一条；token 重叠 ≥85% 保留更简洁版本
 4. **合并相似规则**：同主题规则合并为一条祈使句，保留约束并集
 5. **冲突解决**：优先级 更安全 > 更通用 > 更具体
-6. **压缩**：改写为简短祈使句，无解释/理由/示例，每条 ≤12 英文单词
+6. **压缩**：改写为简短祈使句，无解释/理由/示例，每条 ≤12 英文单词；纯文本代理（Cursor 旧版 / Windsurf / Cline）输出时剥离 backtick、`**` 等 Markdown 格式符号
 7. **分类（BASE vs SPEC）**：规则转小写，命中以下任意关键词 → SPEC，否则 → BASE
 
 | 类别 | 关键词 |
@@ -148,7 +148,7 @@ description: 扫描本机所有 agent 规则文件，合并去重生成 ~/.claud
 
 Cursor MDC frontmatter：`description: Project coding rules` + `alwaysApply: true`
 
-检测到清单文件时前置项目上下文块：`# Project: {name} ({type})` / `# Stack: {detected}` / `# Agent: {name}`
+检测到项目清单（package.json / Cargo.toml 等）时前置项目上下文块：`# Project: {name} ({type})` / `# Stack: {detected}` / `# Agent: {name}`
 
 输出文件已存在时，显示差异并请求确认后再覆写。
 

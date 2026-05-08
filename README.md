@@ -4,7 +4,7 @@
 
 ## 背景
 
-每次开启新项目时，都要花时间四处收集散落在各个仓库里的 `CLAUDE.md`、`.cursorrules` 等规则文件，再手动整理成当前项目需要的格式——这件事重复且低价值。rule-forge 的目的就是把这个过程自动化：扫描本机所有规则、合并去重、一键注入到新项目里。
+每次开启新项目时，都要花时间四处收集散落在各个仓库里的 `CLAUDE.md`、`.cursorrules` 等规则文件，再手动整理成当前项目需要的格式——这件事重复且低价值。merge-rules 的目的就是把这个过程自动化：扫描本机所有规则、合并去重、一键注入到新项目里。
 
 > 本 skill 使用 **Claude Code + Claude Sonnet 4.6** 编写。
 > 使用前请仔细阅读生成结果，规则的正确性与适用性需自行判断，作者不作任何保证。
@@ -95,13 +95,19 @@ Copy-Item SKILL.md "$env:APPDATA\Claude\skills\merge-rules\SKILL.md"
 
 ```
 examples/
-├── merge-rules.md              # /merge-rules 生成的合并规则（BASE + SPEC 两节）
+├── merge-rules.md                   # /merge-rules 生成的合并规则（BASE + SPEC 两节）
 ├── output-claude-code/
-│   └── CLAUDE.md               # /merge-rules init（默认 scope=base）
+│   └── CLAUDE.md                    # /merge-rules init（默认 scope=base）
 ├── output-cursor/
-│   └── .cursorrules            # /merge-rules init --agent cursor（旧版格式）
-└── output-cursor-modern/
-    └── .cursor/rules/project.mdc  # /merge-rules init --agent cursor（MDC 格式）
+│   └── .cursorrules                 # /merge-rules init --agent cursor（旧版格式）
+├── output-cursor-modern/
+│   └── .cursor/rules/project.mdc    # /merge-rules init --agent cursor（MDC 格式）
+├── output-windsurf/
+│   └── .windsurfrules               # /merge-rules init --agent windsurf（纯文本格式）
+├── output-gemini/
+│   └── GEMINI.md                    # /merge-rules init --agent gemini
+└── output-copilot/
+    └── .github/copilot-instructions.md  # /merge-rules init --agent copilot
 ```
 
 ## 设计原则

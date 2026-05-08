@@ -4,8 +4,8 @@
 
 ```bash
 # 1. Install the skill
-mkdir -p ~/.claude/skills
-cp skill.md ~/.claude/skills/merge-rules.md
+mkdir -p ~/.claude/skills/merge-rules
+cp SKILL.md ~/.claude/skills/merge-rules/SKILL.md
 
 # 2. Point discovery at the test fixtures (run from repo root)
 # During testing, temporarily set HOME or run from the fixtures dir
